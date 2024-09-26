@@ -1,0 +1,73 @@
+{
+  "type": "Program",
+  "body": [
+    {
+      "type": "VariableDeclaration",
+      "kind": "var",
+      "declarations": [
+        {
+          "type": "VariableDeclarator",
+          "id": { "type": "Identifier", "name": "a", "pos": 7 },
+          "init": { "type": "NumericalLiteral", "value": 1.0, "pos": 10 },
+          "pos": 10
+        }
+      ],
+      "pos": 10
+    },
+    {
+      "type": "VariableDeclaration",
+      "kind": "const",
+      "declarations": [
+        {
+          "type": "VariableDeclarator",
+          "id": { "type": "Identifier", "name": "b", "pos": 20 },
+          "init": { "type": "StringLiteral", "value": "\"hello世界\"", "pos": 35 },
+          "pos": 35
+        }
+      ],
+      "pos": 35
+    },
+    {
+      "type": "VariableDeclaration",
+      "kind": "let",
+      "declarations": [
+        {
+          "type": "VariableDeclarator",
+          "id": { "type": "Identifier", "name": "c", "pos": 43 },
+          "init": { "type": "Identifier", "name": "b", "pos": 46 },
+          "pos": 46
+        }
+      ],
+      "pos": 46
+    },
+    {
+      "type": "ExpressionStatement",
+      "expression": {
+        "type": "AssignmentExpression",
+        "operator": "=",
+        "left": { "type": "Identifier", "name": "a", "pos": 51 },
+        "right": { "type": "NumericalLiteral", "value": 2.0, "pos": 55 },
+        "pos": 55
+      },
+      "pos": 55
+    },
+    {
+      "type": "ExpressionStatement",
+      "expression": {
+        "type": "AssignmentExpression",
+        "operator": "=",
+        "left": { "type": "Identifier", "name": "a", "pos": 59 },
+        "right": { "type": "StringLiteral", "value": "\"12\"", "pos": 67 },
+        "pos": 67
+      },
+      "pos": 67
+    },
+    { "type": "ExpressionStatement", "expression": { "type": "Identifier", "name": "a", "pos": 70 }, "pos": 70 },
+    {
+      "type": "ExpressionStatement",
+      "expression": { "type": "StringLiteral", "value": "\"12\"", "pos": 76 },
+      "pos": 76
+    }
+  ],
+  "pos": 76
+}
