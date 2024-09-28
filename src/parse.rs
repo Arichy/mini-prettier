@@ -3,7 +3,7 @@ use serde::Serialize;
 use crate::lexer::{Lexer, Token};
 
 #[derive(Debug, Serialize)]
-pub struct Location(usize);
+pub struct Location(usize, usize);
 
 #[derive(Debug, Serialize)]
 pub struct Identifier<'a> {
@@ -138,32 +138,35 @@ impl<'a> Parser<'a> {
         Self { lexer }
     }
 
+    pub fn get_token(&self) -> Token {
+        self.lexer.token
+    }
+
     pub fn parse(&mut self) -> Program<'a> {
-        self.lexer.scan();
         self.parse_module()
     }
 
     fn parse_module(&mut self) -> Program<'a> {
         let mut body = vec![];
+        let start = self.lexer.get_char_pos();
+
         while let Some(statement) = self.parse_statement() {
             body.push(statement);
-            self.parse_expected(Token::Semicolon);
         }
 
         Program {
             type_name: "Program",
             body,
-            pos: Location(self.lexer.pos),
+            pos: Location(start, self.lexer.get_char_pos()),
         }
     }
 
     fn parse_string_literal(&mut self) -> Option<StringLiteral<'a>> {
-        let text = self.lexer.text;
-        if self.try_parse_token(Token::StringLiteral) {
+        if let (true, Some((_, text, range))) = self.try_parse_token(Token::StringLiteral) {
             Some(StringLiteral {
                 type_name: "StringLiteral",
                 value: text,
-                pos: Location(self.lexer.pos),
+                pos: Location(range.0, range.1),
             })
         } else {
             None
@@ -171,12 +174,11 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_numerical_literal(&mut self) -> Option<NumericalLiteral> {
-        let text = self.lexer.text;
-        if self.try_parse_token(Token::NumericalLiteral) {
+        if let (true, Some((_, text, range))) = self.try_parse_token(Token::NumericalLiteral) {
             Some(NumericalLiteral {
                 type_name: "NumericalLiteral",
                 value: text.parse().unwrap(),
-                pos: Location(self.lexer.pos),
+                pos: Location(range.0, range.1),
             })
         } else {
             None
@@ -184,12 +186,11 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_identifier(&mut self) -> Option<Identifier<'a>> {
-        let text = self.lexer.text;
-        if self.try_parse_token(Token::Identifier) {
+        if let (true, Some((_, text, range))) = self.try_parse_token(Token::Identifier) {
             Some(Identifier {
                 type_name: "Identifier",
                 name: text,
-                pos: Location(self.lexer.pos),
+                pos: Location(range.0, range.1),
             })
         } else {
             None
@@ -202,17 +203,19 @@ impl<'a> Parser<'a> {
 
     fn parse_assignment_expression(&mut self, left: Expression<'a>) -> Option<Expression<'a>> {
         if let Expression::Identifier(identifier) = left {
-            if !self.try_parse_token(Token::Equals) {
+            if !self.try_parse_token(Token::Equals).0 {
                 return None;
             }
 
             let right = self.parse_expression(Precedence::Assignment)?;
+            let start = identifier.pos.0;
+            let end = self.get_expression_range(&right).1;
             Some(Expression::AssignmentExpression(AssignmentExpression {
                 type_name: "AssignmentExpression",
                 left: identifier,
                 operator: "=",
                 right: Box::new(right),
-                pos: Location(self.lexer.pos),
+                pos: Location(start, end),
             }))
         } else {
             None
@@ -265,8 +268,21 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn get_expression_range(&self, expr: &Expression<'a>) -> (usize, usize) {
+        match expr {
+            Expression::Identifier(i) => (i.pos.0, i.pos.1),
+            Expression::AssignmentExpression(a) => (a.pos.0, a.pos.1),
+            Expression::NumericalLiteral(n) => (n.pos.0, n.pos.1),
+            Expression::StringLiteral(s) => (s.pos.0, s.pos.1),
+        }
+    }
+
     fn parse_statement(&mut self) -> Option<Statement<'a>> {
-        let pos = self.lexer.pos;
+        if self.lexer.token == Token::BOF {
+            self.lexer.scan();
+        }
+
+        let start = self.lexer.get_text_char_range().0;
 
         match self.lexer.token {
             Token::Var | Token::Let | Token::Const => {
@@ -278,67 +294,99 @@ impl<'a> Parser<'a> {
                 };
 
                 self.lexer.scan();
+                let variable_declarator_start = self.lexer.get_text_char_range().0;
                 let id = self.parse_identifier()?;
 
-                let init = if self.try_parse_token(Token::Equals) {
+                let init = if self.try_parse_token(Token::Equals).0 {
                     self.parse_expression(Precedence::Lowest)
                 } else {
                     None
                 };
 
+                let (_, _, (_, end)) = self.parse_expected(Token::Semicolon);
+
                 Some(Statement::Declaration(Declaration::VariableDeclaration(
                     VariableDeclaration {
                         type_name: "VariableDeclaration",
                         kind,
-                        pos: Location(self.lexer.pos),
+                        pos: Location(start, end),
                         declarations: vec![VariableDeclarator {
                             type_name: "VariableDeclarator",
                             id,
                             init,
-                            pos: Location(self.lexer.pos),
+                            pos: Location(variable_declarator_start, end - 1), // exclude semicolon
                         }],
                     },
                 )))
             }
             // Token::Type => {}
-            Token::Identifier => Some(Statement::ExpressionStatement(ExpressionStatement {
-                type_name: "ExpressionStatement",
-                expression: self.parse_expression(Precedence::Lowest)?,
-                pos: Location(self.lexer.pos),
-            })),
+            Token::Identifier => {
+                let expr = self.parse_expression(Precedence::Lowest)?;
 
-            Token::StringLiteral => Some(Statement::ExpressionStatement(ExpressionStatement {
-                type_name: "ExpressionStatement",
-                expression: Expression::StringLiteral(self.parse_string_literal()?),
-                pos: Location(self.lexer.pos),
-            })),
+                let (_, _, (_, end)) = self.parse_expected(Token::Semicolon);
 
-            Token::NumericalLiteral => Some(Statement::ExpressionStatement(ExpressionStatement {
-                type_name: "ExpressionStatement",
-                expression: Expression::NumericalLiteral(self.parse_numerical_literal()?),
-                pos: Location(self.lexer.pos),
-            })),
+                Some(Statement::ExpressionStatement(ExpressionStatement {
+                    type_name: "ExpressionStatement",
+                    expression: expr,
+                    pos: Location(start, end),
+                }))
+            }
+
+            Token::StringLiteral => {
+                let expr = Expression::StringLiteral(self.parse_string_literal()?);
+
+                let (_, _, (_, end)) = self.parse_expected(Token::Semicolon);
+
+                Some(Statement::ExpressionStatement(ExpressionStatement {
+                    type_name: "ExpressionStatement",
+                    expression: expr,
+                    pos: Location(start, end),
+                }))
+            }
+
+            Token::NumericalLiteral => {
+                let expr = Expression::NumericalLiteral(self.parse_numerical_literal()?);
+
+                let (_, _, (_, end)) = self.parse_expected(Token::Semicolon);
+
+                Some(Statement::ExpressionStatement(ExpressionStatement {
+                    type_name: "ExpressionStatement",
+                    expression: expr,
+                    pos: Location(start, end),
+                }))
+            }
             _ => None,
         }
     }
 
-    fn try_parse_token(&mut self, expected: Token) -> bool {
+    fn try_parse_token(
+        &mut self,
+        expected: Token,
+    ) -> (bool, Option<(Token, &'a str, (usize, usize))>) {
         let ok = self.lexer.token == expected;
 
         if ok {
+            let token = self.lexer.token;
+            let text = self.lexer.text;
+            let range = self.lexer.get_text_char_range();
             self.lexer.scan();
+            (true, Some((token, text, range)))
+        } else {
+            (false, None)
         }
-
-        ok
     }
 
-    fn parse_expected(&mut self, expected: Token) {
-        if !self.try_parse_token(expected) {
+    fn parse_expected(&mut self, expected: Token) -> (Token, &'a str, (usize, usize)) {
+        let res = self.try_parse_token(expected);
+        if !res.0 {
             panic!(
                 "{} parse token: Expected {:?}, but got {:?}",
-                self.lexer.pos, expected, self.lexer.token
+                self.lexer.get_char_pos(),
+                expected,
+                self.lexer.token
             );
         }
+        res.1.unwrap()
     }
 }
 
@@ -357,7 +405,6 @@ mod tests {
 
         let res = parser.parse();
         let json = serde_json::to_string(&res).unwrap();
-        println!("{:?}", res);
         println!("{}", json);
     }
 }

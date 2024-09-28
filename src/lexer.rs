@@ -1,4 +1,4 @@
-use std::{iter::Peekable, str::Chars};
+use std::collections::HashMap;
 
 use crate::regexes;
 
@@ -23,15 +23,36 @@ pub enum Token {
     EOF,
 }
 
+fn create_byte_to_char_map(s: &str) -> HashMap<usize, usize> {
+    let mut last_char_index = 0;
+    let mut last_byte_index = 0;
+    let mut last_char_len = 0;
+    let char_count = s.chars().count();
+    let mut res = HashMap::new();
+    for (char_index, (byte_index, char)) in s.char_indices().enumerate() {
+        res.insert(byte_index, char_index);
+        if char_index == char_count - 1 {
+            last_char_index = char_index;
+            last_byte_index = byte_index;
+            last_char_len = char.len_utf8();
+        }
+    }
+
+    res.insert(last_byte_index + last_char_len, last_char_index + 1); // EOF
+
+    res
+}
+
 #[derive(Debug)]
 pub struct Lexer<'a> {
     pub s: &'a str,
-    // pub chars: Vec<char>,
-    // chars: std::str::Chars<'a>,
+
+    byte_to_char_map: HashMap<usize, usize>,
+
     pub pos: usize,
-    // pub text_range: (usize, usize),
     pub text: &'a str,
     pub token: Token,
+    pub range: (usize, usize),
 }
 
 fn char_to_str(c: char, buf: &mut [u8; 4]) -> &str {
@@ -39,23 +60,32 @@ fn char_to_str(c: char, buf: &mut [u8; 4]) -> &str {
     std::str::from_utf8(buf).unwrap()
 }
 
-fn char_slice_to_string(chars: &[char]) -> String {
-    chars.iter().collect()
-}
-
 impl<'a> Lexer<'a> {
     pub fn new(s: &'a str) -> Lexer<'a> {
-        // let chars = s.chars();
-
+        let byte_to_char_map = create_byte_to_char_map(s);
         Lexer {
             s,
-            // chars,
-            // chars: s.chars().collect(),
             pos: 0,
-            // text_range: (0, 0),
+            byte_to_char_map,
             text: "",
             token: Token::BOF,
+            range: (0, 0),
         }
+    }
+
+    pub fn get_char_pos_by_byte_pos(&self, byte_pos: usize) -> usize {
+        *self.byte_to_char_map.get(&byte_pos).unwrap()
+    }
+
+    pub fn get_char_pos(&self) -> usize {
+        self.get_char_pos_by_byte_pos(self.pos)
+    }
+
+    pub fn get_text_char_range(&self) -> (usize, usize) {
+        (
+            self.get_char_pos_by_byte_pos(self.range.0),
+            self.get_char_pos_by_byte_pos(self.range.1),
+        )
     }
 
     #[inline]
@@ -110,6 +140,7 @@ impl<'a> Lexer<'a> {
                 self.advance(1);
                 self.token = Token::StringLiteral;
                 self.text = &self.s[start..self.pos];
+                self.range = (start, self.pos);
                 return;
             }
 
@@ -125,13 +156,17 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    pub fn scan(&mut self) {
+    pub fn scan_whitespaces(&mut self) {
         self.scan_forward(|c| {
             let mut buf = [0; 4];
             let s: &str = char_to_str(c, &mut buf);
 
             regexes::white_space().is_match(s)
         });
+    }
+
+    pub fn scan(&mut self) {
+        self.scan_whitespaces();
 
         let start = self.pos;
         if self.pos == self.s.len() {
@@ -163,6 +198,7 @@ impl<'a> Lexer<'a> {
             // self.text_range = (start, self.pos);
             self.text = &self.s[start..self.pos];
             self.token = Token::NumericalLiteral;
+            self.range = (start, self.pos);
             return;
         }
 
@@ -183,6 +219,7 @@ impl<'a> Lexer<'a> {
                 "return" => Token::Return,
                 _ => Token::Identifier,
             };
+            self.range = (start, self.pos);
 
             return;
         }
@@ -195,12 +232,13 @@ impl<'a> Lexer<'a> {
         };
         self.advance(cur_char.len_utf8());
         self.text = &self.s[start..self.pos];
+        self.range = (start, self.pos);
     }
 
-    pub fn lex_all(&mut self) -> Vec<(Token, &str)> {
+    pub fn lex_all(&mut self) -> Vec<(Token, &str, (usize, usize))> {
         let mut list = vec![];
         while self.token != Token::EOF {
-            list.push((self.token, self.text));
+            list.push((self.token, self.text, self.range));
             self.scan();
         }
         list
@@ -276,25 +314,27 @@ mod tests {
         let mut lexer = Lexer::new(s);
         let result = lexer.lex_all();
 
+        println!("{:?}", result);
+
         assert_eq!(
             result,
             [
-                (Token::BOF, ""),
-                (Token::Let, "let"),
-                (Token::Identifier, "a"),
-                (Token::Equals, "="),
-                (Token::NumericalLiteral, "1"),
-                (Token::Semicolon, ";"),
-                (Token::Const, "const"),
-                (Token::Identifier, "b"),
-                (Token::Equals, "="),
-                (Token::StringLiteral, "'hello世界'"),
-                (Token::Semicolon, ";"),
-                (Token::Let, "let"),
-                (Token::Identifier, "c"),
-                (Token::Equals, "="),
-                (Token::Identifier, "b"),
-                (Token::Semicolon, ";")
+                (Token::BOF, "", (0, 0)),
+                (Token::Let, "let", ((9, 12))),
+                (Token::Identifier, "a", (13, 14)),
+                (Token::Equals, "=", (15, 16)),
+                (Token::NumericalLiteral, "1", (17, 18)),
+                (Token::Semicolon, ";", (18, 19)),
+                (Token::Const, "const", (28, 33)),
+                (Token::Identifier, "b", (34, 35)),
+                (Token::Equals, "=", (36, 37)),
+                (Token::StringLiteral, "'hello世界'", (38, 51)),
+                (Token::Semicolon, ";", (51, 52)),
+                (Token::Let, "let", (61, 64)),
+                (Token::Identifier, "c", (65, 66)),
+                (Token::Equals, "=", (67, 68)),
+                (Token::Identifier, "b", (69, 70)),
+                (Token::Semicolon, ";", (70, 71))
             ]
         );
     }
