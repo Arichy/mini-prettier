@@ -262,7 +262,7 @@ impl<'a> Parser<'a> {
                 return None;
             }
 
-            let right = self.parse_expression(Precedence::Assignment)?;
+            let right = self.parse_expression(Precedence::Assignment, 0)?;
             let start = identifier.pos.0;
             let end = self.get_expression_range(&right).1;
             Some(Expression::AssignmentExpression(AssignmentExpression {
@@ -280,7 +280,7 @@ impl<'a> Parser<'a> {
     fn parse_binary_expression(&mut self, left: Expression<'a>) -> Option<Expression<'a>> {
         let token = self.lexer.token;
         self.lexer.scan();
-        let right = self.parse_expression(Precedence::of(&token))?;
+        let right = self.parse_expression(Precedence::of(&token), 0)?;
         let start = self.get_expression_range(&left).0;
         let end = self.get_expression_range(&right).1;
 
@@ -326,14 +326,31 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_expression(&mut self, precedence: Precedence) -> Option<Expression<'a>> {
+    fn parse_left_paren(&mut self) -> usize {
+        let mut level = 0;
+        while let Token::LeftParen = self.lexer.token {
+            level += 1;
+            self.lexer.scan();
+        }
+
+        level
+    }
+
+    fn parse_expression(
+        &mut self,
+        precedence: Precedence,
+        paren_level: usize,
+    ) -> Option<Expression<'a>> {
+        let mut level = self.parse_left_paren();
+
         if let Some(mut left) = self.parse_prefix() {
             while let Some(next_precedence) = self.next_precedence() {
                 println!(
                     "precedence: {:?}, next_precedence: {:?}, left: {:?}",
                     precedence, next_precedence, left
                 );
-                if precedence >= next_precedence {
+                if level > 0 {
+                } else if precedence >= next_precedence {
                     break;
                 }
 
@@ -358,6 +375,14 @@ impl<'a> Parser<'a> {
                     _ => {
                         break;
                     }
+                }
+
+                while let Token::RightParen = self.lexer.token {
+                    if level == 0 {
+                        break;
+                    }
+                    level -= 1;
+                    self.lexer.scan();
                 }
             }
 
@@ -398,7 +423,7 @@ impl<'a> Parser<'a> {
                 let id = self.parse_identifier()?;
 
                 let init = if self.try_parse_token(Token::Equals).0 {
-                    self.parse_expression(Precedence::Lowest)
+                    self.parse_expression(Precedence::Lowest, 0)
                 } else {
                     None
                 };
@@ -421,7 +446,7 @@ impl<'a> Parser<'a> {
             }
             // Token::Type => {}
             Token::Identifier => {
-                let expr = self.parse_expression(Precedence::Lowest)?;
+                let expr = self.parse_expression(Precedence::Lowest, 0)?;
 
                 let (_, _, (_, end)) = self.parse_expected(Token::Semicolon);
 
@@ -493,7 +518,7 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::{read_to_string,write};
+    use std::fs::{read_to_string, write};
 
     #[test]
     fn parse() {
@@ -507,6 +532,5 @@ mod tests {
         let json = serde_json::to_string_pretty(&res).unwrap();
         let _ = write("res.json", json);
         // println!("{}", json);
-        
     }
 }
