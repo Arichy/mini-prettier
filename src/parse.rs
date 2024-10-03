@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use crate::lexer::{Lexer, Token};
+use crate::lexer::{self, Lexer, Token};
 
 #[derive(Debug, Serialize)]
 pub struct Location(usize, usize);
@@ -40,12 +40,56 @@ pub struct AssignmentExpression<'a> {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BinaryOperator {
+    #[serde(rename = "==")]
+    Eq,
+    #[serde(rename = "!=")]
+    NotEq,
+    #[serde(rename = "===")]
+    StrictEq,
+    #[serde(rename = "!==")]
+    StrictNotEq,
+    #[serde(rename = "<")]
+    LessThan,
+    #[serde(rename = "<=")]
+    LessThanOrEq,
+    #[serde(rename = ">")]
+    GreaterThan,
+    #[serde(rename = ">=")]
+    GreaterThanOrEq,
+    #[serde(rename = "+")]
+    Add,
+    #[serde(rename = "-")]
+    Subtract,
+    #[serde(rename = "*")]
+    Multiply,
+    #[serde(rename = "/")]
+    Divide,
+    #[serde(rename = "%")]
+    Modulus,
+    #[serde(rename = "**")]
+    Exponentiation,
+}
+
+#[derive(Debug, Serialize)]
+pub struct BinaryExpression<'a> {
+    #[serde(rename(serialize = "type"))]
+    pub type_name: &'static str,
+    pub operator: BinaryOperator,
+    left: Box<Expression<'a>>,
+    right: Box<Expression<'a>>,
+    pub pos: Location,
+}
+
+#[derive(Debug, Serialize)]
 #[serde(untagged)]
 pub enum Expression<'a> {
     Identifier(Identifier<'a>),
     StringLiteral(StringLiteral<'a>),
     NumericalLiteral(NumericalLiteral),
     AssignmentExpression(AssignmentExpression<'a>),
+    BinaryExpression(BinaryExpression<'a>),
 }
 
 #[derive(Debug, Serialize)]
@@ -115,8 +159,10 @@ pub enum Node<'a> {
 enum Precedence {
     Lowest,
     Assignment,
+    Comparison,
     Sum,
     Product,
+    Exponentiation,
     Call,
 }
 
@@ -124,6 +170,15 @@ impl Precedence {
     fn of(token: &Token) -> Self {
         match token {
             Token::Equals => Precedence::Assignment,
+            Token::Eq
+            | Token::NotEq
+            | Token::LessThan
+            | Token::LessThanOrEq
+            | Token::GreaterThan
+            | Token::GreaterThanOrEq => Precedence::Comparison,
+            Token::Plus | Token::Minus => Precedence::Sum,
+            Token::Multiply | Token::Divide | Token::Module => Precedence::Product,
+            Token::Exponent => Precedence::Exponentiation,
             _ => Precedence::Lowest,
         }
     }
@@ -222,6 +277,36 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn parse_binary_expression(&mut self, left: Expression<'a>) -> Option<Expression<'a>> {
+        let token = self.lexer.token;
+        self.lexer.scan();
+        let right = self.parse_expression(Precedence::of(&token))?;
+        let start = self.get_expression_range(&left).0;
+        let end = self.get_expression_range(&right).1;
+
+        Some(Expression::BinaryExpression(BinaryExpression {
+            type_name: "BinaryExpression",
+            left: Box::new(left),
+            operator: match token {
+                Token::Plus => BinaryOperator::Add,
+                Token::Minus => BinaryOperator::Subtract,
+                Token::Multiply => BinaryOperator::Multiply,
+                Token::Divide => BinaryOperator::Divide,
+                Token::Exponent => BinaryOperator::Exponentiation,
+                Token::Module => BinaryOperator::Modulus,
+                Token::Eq => BinaryOperator::Eq,
+                Token::NotEq => BinaryOperator::NotEq,
+                Token::LessThan => BinaryOperator::LessThan,
+                Token::LessThanOrEq => BinaryOperator::LessThanOrEq,
+                Token::GreaterThan => BinaryOperator::GreaterThan,
+                Token::GreaterThanOrEq => BinaryOperator::GreaterThanOrEq,
+                _ => unreachable!(),
+            },
+            right: Box::new(right),
+            pos: Location(start, end),
+        }))
+    }
+
     fn next_precedence(&self) -> Option<Precedence> {
         if self.lexer.token == Token::EOF {
             None
@@ -256,6 +341,20 @@ impl<'a> Parser<'a> {
                     Token::Equals => {
                         left = self.parse_assignment_expression(left)?;
                     }
+                    Token::Plus
+                    | Token::Minus
+                    | Token::Multiply
+                    | Token::Divide
+                    | Token::Exponent
+                    | Token::Module
+                    | Token::Eq
+                    | Token::NotEq
+                    | Token::LessThan
+                    | Token::LessThanOrEq
+                    | Token::GreaterThan
+                    | Token::GreaterThanOrEq => {
+                        left = self.parse_binary_expression(left)?;
+                    }
                     _ => {
                         break;
                     }
@@ -274,6 +373,7 @@ impl<'a> Parser<'a> {
             Expression::AssignmentExpression(a) => (a.pos.0, a.pos.1),
             Expression::NumericalLiteral(n) => (n.pos.0, n.pos.1),
             Expression::StringLiteral(s) => (s.pos.0, s.pos.1),
+            Expression::BinaryExpression(b) => (b.pos.0, b.pos.1),
         }
     }
 
@@ -393,7 +493,7 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::read_to_string;
+    use std::fs::{read_to_string,write};
 
     #[test]
     fn parse() {
@@ -404,7 +504,9 @@ mod tests {
         };
 
         let res = parser.parse();
-        let json = serde_json::to_string(&res).unwrap();
-        println!("{}", json);
+        let json = serde_json::to_string_pretty(&res).unwrap();
+        let _ = write("res.json", json);
+        // println!("{}", json);
+        
     }
 }

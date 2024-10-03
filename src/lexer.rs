@@ -10,7 +10,23 @@ pub enum Token {
     Const,
     // Type,
     Return,
-    Equals,
+    Equals,          // =
+    Eq,              // ==
+    NotEq,           // !=
+    StrictEq,        // ===
+    StrictNotEq,     // !==
+    LessThan,        // <
+    LessThanOrEq,    // <=
+    GreaterThan,     // >
+    GreaterThanOrEq, // >=
+    Plus,
+    Minus,
+    Multiply,
+    Divide,
+    Module,
+    Exponent,
+    LeftParen,
+    RightParen,
     StringLiteral,
     NumericalLiteral,
     Identifier,
@@ -18,9 +34,9 @@ pub enum Token {
     Semicolon,
     Colon,
     Whitespace,
-    Unknown,
     BOF,
     EOF,
+    Unknown,
 }
 
 fn create_byte_to_char_map(s: &str) -> HashMap<usize, usize> {
@@ -224,10 +240,95 @@ impl<'a> Lexer<'a> {
             return;
         }
 
+        match cur_char {
+            '+' => {
+                self.advance(1);
+                self.token = Token::Plus;
+                self.text = &self.s[start..self.pos];
+                self.range = (start, self.pos);
+                return;
+            }
+            '-' => {
+                self.advance(1);
+                self.token = Token::Minus;
+                self.text = &self.s[start..self.pos];
+                self.range = (start, self.pos);
+                return;
+            }
+            '*' => {
+                self.advance(1);
+                if self.cur_char() == '*' {
+                    self.advance(1);
+                    self.token = Token::Exponent;
+                } else {
+                    self.token = Token::Multiply;
+                }
+                self.text = &self.s[start..self.pos];
+                self.range = (start, self.pos);
+                return;
+            }
+            '/' => {
+                self.advance(1);
+                self.token = Token::Divide;
+                self.text = &self.s[start..self.pos];
+                self.range = (start, self.pos);
+                return;
+            }
+            '%' => {
+                self.advance(1);
+                self.token = Token::Module;
+                self.text = &self.s[start..self.pos];
+                self.range = (start, self.pos);
+                return;
+            }
+            '=' => {
+                self.advance(1);
+                if self.cur_char() == '=' {
+                    self.advance(1);
+                    if self.cur_char() == '=' {
+                        self.token = Token::StrictEq;
+                    } else {
+                        self.token = Token::Eq;
+                    }
+                } else {
+                    self.token = Token::Equals;
+                }
+                self.text = &self.s[start..self.pos];
+                self.range = (start, self.pos);
+                return;
+            }
+            '<' => {
+                self.advance(1);
+                if self.cur_char() == '=' {
+                    self.advance(1);
+                    self.token = Token::LessThanOrEq;
+                } else {
+                    self.token = Token::LessThan;
+                }
+                self.text = &self.s[start..self.pos];
+                self.range = (start, self.pos);
+                return;
+            }
+            '>' => {
+                self.advance(1);
+                if self.cur_char() == '=' {
+                    self.advance(1);
+                    self.token = Token::GreaterThanOrEq;
+                } else {
+                    self.token = Token::GreaterThan;
+                }
+                self.text = &self.s[start..self.pos];
+                self.range = (start, self.pos);
+                return;
+            }
+            _ => {}
+        };
+
         self.token = match cur_char {
-            '=' => Token::Equals,
             ';' => Token::Semicolon,
             ':' => Token::Colon,
+            '(' => Token::LeftParen,
+            ')' => Token::RightParen,
             _ => Token::Unknown,
         };
         self.advance(cur_char.len_utf8());
@@ -247,6 +348,8 @@ impl<'a> Lexer<'a> {
 
 #[cfg(test)]
 mod tests {
+    use std::fs::read_to_string;
+
     use super::*;
 
     #[test]
@@ -337,5 +440,13 @@ mod tests {
                 (Token::Semicolon, ";", (70, 71))
             ]
         );
+    }
+
+    #[test]
+    fn test() {
+        let s = read_to_string("test.js").unwrap();
+        let mut lexer = Lexer::new(&s);
+        let result = lexer.lex_all();
+        println!("{:?}", result);
     }
 }
