@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use regex::bytes;
+
 use crate::regexes;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -64,6 +66,7 @@ pub struct Lexer<'a> {
     pub s: &'a str,
 
     byte_to_char_map: HashMap<usize, usize>,
+    char_to_byte_map: HashMap<usize, usize>,
 
     pub pos: usize,
     pub text: &'a str,
@@ -79,10 +82,16 @@ fn char_to_str(c: char, buf: &mut [u8; 4]) -> &str {
 impl<'a> Lexer<'a> {
     pub fn new(s: &'a str) -> Lexer<'a> {
         let byte_to_char_map = create_byte_to_char_map(s);
+        let mut char_to_byte_map = HashMap::new();
+        for (byte_index, char_index) in &byte_to_char_map {
+            char_to_byte_map.insert(*byte_index, *char_index);
+        }
+
         Lexer {
             s,
             pos: 0,
             byte_to_char_map,
+            char_to_byte_map,
             text: "",
             token: Token::BOF,
             range: (0, 0),
@@ -343,6 +352,12 @@ impl<'a> Lexer<'a> {
             self.scan();
         }
         list
+    }
+
+    pub fn get_string_by_char_range(&self, start: usize, end: usize) -> &str {
+        let byte_start = *self.char_to_byte_map.get(&start).unwrap();
+        let byte_end = *self.char_to_byte_map.get(&end).unwrap();
+        &self.s[byte_start..byte_end]
     }
 }
 

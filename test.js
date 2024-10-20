@@ -1,7 +1,12 @@
+let p = (2 + 2) * 4;
 var a = 1;
-const b = "hello世界";
+const b = "hello";
 let c = b;
 a  =  2;
 a =   "12" ;
 a;
 "12";
+let d = a + 1 - 3 * 5 ** 10 / 4 % 10;
+let e = 1 * (2 + 3) * 4;
+let f = 1 * ((2 + (3+10)) * 4);
+"let e = 2 >=1 + 1>=3";

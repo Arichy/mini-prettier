@@ -1,6 +1,5 @@
+use crate::lexer::{Lexer, Token};
 use serde::Serialize;
-
-use crate::lexer::{self, Lexer, Token};
 
 #[derive(Debug, Serialize)]
 pub struct Location(usize, usize);
@@ -90,6 +89,28 @@ pub enum Expression<'a> {
     NumericalLiteral(NumericalLiteral),
     AssignmentExpression(AssignmentExpression<'a>),
     BinaryExpression(BinaryExpression<'a>),
+}
+
+impl<'a> Expression<'a> {
+    pub fn set_pos(&mut self, new_pos: Location) {
+        match self {
+            Expression::Identifier(identifier) => identifier.pos = new_pos,
+            Expression::StringLiteral(string_literal) => string_literal.pos = new_pos,
+            Expression::NumericalLiteral(numerical_literal) => numerical_literal.pos = new_pos,
+            Expression::AssignmentExpression(assignment_expr) => assignment_expr.pos = new_pos,
+            Expression::BinaryExpression(binary_expr) => binary_expr.pos = new_pos,
+        }
+    }
+
+    pub fn get_range(&self) -> (usize, usize) {
+        match self {
+            Expression::Identifier(i) => (i.pos.0, i.pos.1),
+            Expression::AssignmentExpression(a) => (a.pos.0, a.pos.1),
+            Expression::NumericalLiteral(n) => (n.pos.0, n.pos.1),
+            Expression::StringLiteral(s) => (s.pos.0, s.pos.1),
+            Expression::BinaryExpression(b) => (b.pos.0, b.pos.1),
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -262,9 +283,9 @@ impl<'a> Parser<'a> {
                 return None;
             }
 
-            let right = self.parse_expression(Precedence::Assignment, 0)?;
+            let right = self.parse_expression(Precedence::Assignment)?;
             let start = identifier.pos.0;
-            let end = self.get_expression_range(&right).1;
+            let end = right.get_range().1;
             Some(Expression::AssignmentExpression(AssignmentExpression {
                 type_name: "AssignmentExpression",
                 left: identifier,
@@ -280,9 +301,9 @@ impl<'a> Parser<'a> {
     fn parse_binary_expression(&mut self, left: Expression<'a>) -> Option<Expression<'a>> {
         let token = self.lexer.token;
         self.lexer.scan();
-        let right = self.parse_expression(Precedence::of(&token), 0)?;
-        let start = self.get_expression_range(&left).0;
-        let end = self.get_expression_range(&right).1;
+        let right = self.parse_expression(Precedence::of(&token))?;
+        let start = left.get_range().0;
+        let end = right.get_range().1;
 
         Some(Expression::BinaryExpression(BinaryExpression {
             type_name: "BinaryExpression",
@@ -316,6 +337,16 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_prefix(&mut self) -> Option<Expression<'a>> {
+        if self.get_token() == Token::LeftParen {
+            self.lexer.scan();
+            let result = self.parse_expression(Precedence::Lowest);
+
+            self.parse_expected(Token::RightParen);
+            // result.as_ref().unwrap().
+
+            return result;
+        }
+
         match &self.lexer.token {
             Token::Identifier => Some(Expression::Identifier(self.parse_identifier()?)),
             Token::StringLiteral => Some(Expression::StringLiteral(self.parse_string_literal()?)),
@@ -336,21 +367,16 @@ impl<'a> Parser<'a> {
         level
     }
 
-    fn parse_expression(
-        &mut self,
-        precedence: Precedence,
-        paren_level: usize,
-    ) -> Option<Expression<'a>> {
-        let mut level = self.parse_left_paren();
-
+    fn parse_expression(&mut self, precedence: Precedence) -> Option<Expression<'a>> {
+        println!("Start parsing expression, pos: {}", self.lexer.pos);
         if let Some(mut left) = self.parse_prefix() {
             while let Some(next_precedence) = self.next_precedence() {
                 println!(
                     "precedence: {:?}, next_precedence: {:?}, left: {:?}",
                     precedence, next_precedence, left
                 );
-                if level > 0 {
-                } else if precedence >= next_precedence {
+
+                if precedence >= next_precedence {
                     break;
                 }
 
@@ -376,29 +402,11 @@ impl<'a> Parser<'a> {
                         break;
                     }
                 }
-
-                while let Token::RightParen = self.lexer.token {
-                    if level == 0 {
-                        break;
-                    }
-                    level -= 1;
-                    self.lexer.scan();
-                }
             }
 
             Some(left)
         } else {
             None
-        }
-    }
-
-    fn get_expression_range(&self, expr: &Expression<'a>) -> (usize, usize) {
-        match expr {
-            Expression::Identifier(i) => (i.pos.0, i.pos.1),
-            Expression::AssignmentExpression(a) => (a.pos.0, a.pos.1),
-            Expression::NumericalLiteral(n) => (n.pos.0, n.pos.1),
-            Expression::StringLiteral(s) => (s.pos.0, s.pos.1),
-            Expression::BinaryExpression(b) => (b.pos.0, b.pos.1),
         }
     }
 
@@ -423,7 +431,7 @@ impl<'a> Parser<'a> {
                 let id = self.parse_identifier()?;
 
                 let init = if self.try_parse_token(Token::Equals).0 {
-                    self.parse_expression(Precedence::Lowest, 0)
+                    self.parse_expression(Precedence::Lowest)
                 } else {
                     None
                 };
@@ -446,7 +454,7 @@ impl<'a> Parser<'a> {
             }
             // Token::Type => {}
             Token::Identifier => {
-                let expr = self.parse_expression(Precedence::Lowest, 0)?;
+                let expr = self.parse_expression(Precedence::Lowest)?;
 
                 let (_, _, (_, end)) = self.parse_expected(Token::Semicolon);
 
@@ -530,7 +538,20 @@ mod tests {
 
         let res = parser.parse();
         let json = serde_json::to_string_pretty(&res).unwrap();
-        let _ = write("res.json", json);
+        let _ = write("res.json", json.clone());
         // println!("{}", json);
+    }
+
+    #[test]
+    fn parse_paren() {
+        let js_code = read_to_string("paren.js").unwrap();
+
+        let mut parser = Parser {
+            lexer: Lexer::new(&js_code),
+        };
+
+        let res = parser.parse();
+        let json = serde_json::to_string_pretty(&res).unwrap();
+        let _ = write("paren.json", json);
     }
 }
