@@ -1,183 +1,8 @@
+use crate::ast::*;
 use crate::lexer::{Lexer, Token};
-use serde::Serialize;
-
-#[derive(Debug, Serialize)]
-pub struct Location(usize, usize);
-
-#[derive(Debug, Serialize)]
-pub struct Identifier<'a> {
-    #[serde(rename(serialize = "type"))]
-    pub type_name: &'static str,
-    pub name: &'a str,
-    pub pos: Location,
-}
-
-#[derive(Debug, Serialize)]
-pub struct NumericalLiteral {
-    #[serde(rename(serialize = "type"))]
-    pub type_name: &'static str,
-    pub value: f64,
-    pub pos: Location,
-}
-
-#[derive(Debug, Serialize)]
-pub struct StringLiteral<'a> {
-    #[serde(rename(serialize = "type"))]
-    pub type_name: &'static str,
-    pub value: &'a str,
-    pub pos: Location,
-}
-
-#[derive(Debug, Serialize)]
-pub struct AssignmentExpression<'a> {
-    #[serde(rename(serialize = "type"))]
-    pub type_name: &'static str,
-    pub operator: &'static str,
-    pub left: Identifier<'a>,
-    pub right: Box<Expression<'a>>,
-    pub pos: Location,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum BinaryOperator {
-    #[serde(rename = "==")]
-    Eq,
-    #[serde(rename = "!=")]
-    NotEq,
-    #[serde(rename = "===")]
-    StrictEq,
-    #[serde(rename = "!==")]
-    StrictNotEq,
-    #[serde(rename = "<")]
-    LessThan,
-    #[serde(rename = "<=")]
-    LessThanOrEq,
-    #[serde(rename = ">")]
-    GreaterThan,
-    #[serde(rename = ">=")]
-    GreaterThanOrEq,
-    #[serde(rename = "+")]
-    Add,
-    #[serde(rename = "-")]
-    Subtract,
-    #[serde(rename = "*")]
-    Multiply,
-    #[serde(rename = "/")]
-    Divide,
-    #[serde(rename = "%")]
-    Modulus,
-    #[serde(rename = "**")]
-    Exponentiation,
-}
-
-#[derive(Debug, Serialize)]
-pub struct BinaryExpression<'a> {
-    #[serde(rename(serialize = "type"))]
-    pub type_name: &'static str,
-    pub operator: BinaryOperator,
-    left: Box<Expression<'a>>,
-    right: Box<Expression<'a>>,
-    pub pos: Location,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(untagged)]
-pub enum Expression<'a> {
-    Identifier(Identifier<'a>),
-    StringLiteral(StringLiteral<'a>),
-    NumericalLiteral(NumericalLiteral),
-    AssignmentExpression(AssignmentExpression<'a>),
-    BinaryExpression(BinaryExpression<'a>),
-}
-
-impl<'a> Expression<'a> {
-    pub fn set_pos(&mut self, new_pos: Location) {
-        match self {
-            Expression::Identifier(identifier) => identifier.pos = new_pos,
-            Expression::StringLiteral(string_literal) => string_literal.pos = new_pos,
-            Expression::NumericalLiteral(numerical_literal) => numerical_literal.pos = new_pos,
-            Expression::AssignmentExpression(assignment_expr) => assignment_expr.pos = new_pos,
-            Expression::BinaryExpression(binary_expr) => binary_expr.pos = new_pos,
-        }
-    }
-
-    pub fn get_range(&self) -> (usize, usize) {
-        match self {
-            Expression::Identifier(i) => (i.pos.0, i.pos.1),
-            Expression::AssignmentExpression(a) => (a.pos.0, a.pos.1),
-            Expression::NumericalLiteral(n) => (n.pos.0, n.pos.1),
-            Expression::StringLiteral(s) => (s.pos.0, s.pos.1),
-            Expression::BinaryExpression(b) => (b.pos.0, b.pos.1),
-        }
-    }
-}
-
-#[derive(Debug, Serialize)]
-pub struct VariableDeclaration<'a> {
-    #[serde(rename(serialize = "type"))]
-    pub type_name: &'static str,
-    pub kind: &'static str,
-    pub declarations: Vec<VariableDeclarator<'a>>,
-    pub pos: Location,
-}
-
-#[derive(Debug, Serialize)]
-pub struct VariableDeclarator<'a> {
-    #[serde(rename(serialize = "type"))]
-    pub type_name: &'static str,
-    pub id: Identifier<'a>,
-    pub init: Option<Expression<'a>>,
-    pub pos: Location,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(untagged)]
-pub enum Declaration<'a> {
-    VariableDeclaration(VariableDeclaration<'a>),
-}
-
-#[derive(Debug, Serialize)]
-#[serde(untagged)]
-pub enum Statement<'a> {
-    ExpressionStatement(ExpressionStatement<'a>),
-    Declaration(Declaration<'a>),
-}
-
-#[derive(Debug, Serialize)]
-pub struct ExpressionStatement<'a> {
-    #[serde(rename(serialize = "type"))]
-    pub type_name: &'static str,
-    pub expression: Expression<'a>,
-    pub pos: Location,
-}
-
-#[derive(Debug, Serialize)]
-pub struct Program<'a> {
-    #[serde(rename(serialize = "type"))]
-    pub type_name: &'static str,
-    pub body: Vec<Statement<'a>>,
-    pub pos: Location,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(untagged)]
-pub enum Node<'a> {
-    Identifier(Identifier<'a>),
-    NumericalLiteral(NumericalLiteral),
-    StringLiteral(StringLiteral<'a>),
-    AssignmentExpression(AssignmentExpression<'a>),
-    Expression(Expression<'a>),
-    VariableDeclaration(VariableDeclaration<'a>),
-    VariableDeclarator(VariableDeclarator<'a>),
-    Declaration(Declaration<'a>),
-    Statement(Statement<'a>),
-    ExpressionStatement(ExpressionStatement<'a>),
-    Program(Program<'a>),
-}
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
-enum Precedence {
+pub enum Precedence {
     Lowest,
     Assignment,
     Comparison,
@@ -188,7 +13,7 @@ enum Precedence {
 }
 
 impl Precedence {
-    fn of(token: &Token) -> Self {
+    pub fn of(token: &Token) -> Self {
         match token {
             Token::Equals => Precedence::Assignment,
             Token::Eq
@@ -206,7 +31,7 @@ impl Precedence {
 }
 
 pub struct Parser<'a> {
-    lexer: Lexer<'a>,
+    pub lexer: Lexer<'a>,
 }
 
 impl<'a> Parser<'a> {
