@@ -1,0 +1,368 @@
+{
+  "type": "Program",
+  "body": [
+    {
+      "type": "VariableDeclaration",
+      "kind": "let",
+      "declarations": [
+        {
+          "type": "VariableDeclarator",
+          "id": {
+            "type": "Identifier",
+            "name": "p",
+            "pos": [4, 5]
+          },
+          "init": {
+            "type": "BinaryExpression",
+            "operator": "*",
+            "left": {
+              "type": "BinaryExpression",
+              "operator": "+",
+              "left": {
+                "type": "NumericalLiteral",
+                "value": 2.0,
+                "pos": [9, 10]
+              },
+              "right": {
+                "type": "NumericalLiteral",
+                "value": 2.0,
+                "pos": [13, 14]
+              },
+              "pos": [9, 14]
+            },
+            "right": {
+              "type": "NumericalLiteral",
+              "value": 4.0,
+              "pos": [18, 19]
+            },
+            "pos": [9, 19]
+          },
+          "pos": [4, 19]
+        }
+      ],
+      "pos": [0, 20]
+    },
+    {
+      "type": "VariableDeclaration",
+      "kind": "var",
+      "declarations": [
+        {
+          "type": "VariableDeclarator",
+          "id": {
+            "type": "Identifier",
+            "name": "a",
+            "pos": [25, 26]
+          },
+          "init": {
+            "type": "NumericalLiteral",
+            "value": 1.0,
+            "pos": [29, 30]
+          },
+          "pos": [25, 30]
+        }
+      ],
+      "pos": [21, 31]
+    },
+    {
+      "type": "VariableDeclaration",
+      "kind": "const",
+      "declarations": [
+        {
+          "type": "VariableDeclarator",
+          "id": {
+            "type": "Identifier",
+            "name": "b",
+            "pos": [38, 39]
+          },
+          "init": {
+            "type": "StringLiteral",
+            "value": "\"hello世界\"",
+            "pos": [42, 51]
+          },
+          "pos": [38, 51]
+        }
+      ],
+      "pos": [32, 52]
+    },
+    {
+      "type": "VariableDeclaration",
+      "kind": "let",
+      "declarations": [
+        {
+          "type": "VariableDeclarator",
+          "id": {
+            "type": "Identifier",
+            "name": "c",
+            "pos": [57, 58]
+          },
+          "init": {
+            "type": "Identifier",
+            "name": "b",
+            "pos": [61, 62]
+          },
+          "pos": [57, 62]
+        }
+      ],
+      "pos": [53, 63]
+    },
+    {
+      "type": "ExpressionStatement",
+      "expression": {
+        "type": "AssignmentExpression",
+        "operator": "=",
+        "left": {
+          "type": "Identifier",
+          "name": "a",
+          "pos": [64, 65]
+        },
+        "right": {
+          "type": "NumericalLiteral",
+          "value": 2.0,
+          "pos": [70, 71]
+        },
+        "pos": [64, 71]
+      },
+      "pos": [64, 72]
+    },
+    {
+      "type": "ExpressionStatement",
+      "expression": {
+        "type": "AssignmentExpression",
+        "operator": "=",
+        "left": {
+          "type": "Identifier",
+          "name": "a",
+          "pos": [73, 74]
+        },
+        "right": {
+          "type": "StringLiteral",
+          "value": "\"12\"",
+          "pos": [79, 83]
+        },
+        "pos": [73, 83]
+      },
+      "pos": [73, 85]
+    },
+    {
+      "type": "ExpressionStatement",
+      "expression": {
+        "type": "Identifier",
+        "name": "a",
+        "pos": [86, 87]
+      },
+      "pos": [86, 88]
+    },
+    {
+      "type": "ExpressionStatement",
+      "expression": {
+        "type": "StringLiteral",
+        "value": "\"12\"",
+        "pos": [89, 93]
+      },
+      "pos": [89, 94]
+    },
+    {
+      "type": "VariableDeclaration",
+      "kind": "let",
+      "declarations": [
+        {
+          "type": "VariableDeclarator",
+          "id": {
+            "type": "Identifier",
+            "name": "d",
+            "pos": [99, 100]
+          },
+          "init": {
+            "type": "BinaryExpression",
+            "operator": "-",
+            "left": {
+              "type": "BinaryExpression",
+              "operator": "+",
+              "left": {
+                "type": "Identifier",
+                "name": "a",
+                "pos": [103, 104]
+              },
+              "right": {
+                "type": "NumericalLiteral",
+                "value": 1.0,
+                "pos": [107, 108]
+              },
+              "pos": [103, 108]
+            },
+            "right": {
+              "type": "BinaryExpression",
+              "operator": "%",
+              "left": {
+                "type": "BinaryExpression",
+                "operator": "/",
+                "left": {
+                  "type": "BinaryExpression",
+                  "operator": "*",
+                  "left": {
+                    "type": "NumericalLiteral",
+                    "value": 3.0,
+                    "pos": [110, 111]
+                  },
+                  "right": {
+                    "type": "BinaryExpression",
+                    "operator": "**",
+                    "left": {
+                      "type": "NumericalLiteral",
+                      "value": 5.0,
+                      "pos": [114, 115]
+                    },
+                    "right": {
+                      "type": "NumericalLiteral",
+                      "value": 10.0,
+                      "pos": [119, 121]
+                    },
+                    "pos": [114, 121]
+                  },
+                  "pos": [110, 121]
+                },
+                "right": {
+                  "type": "NumericalLiteral",
+                  "value": 4.0,
+                  "pos": [124, 125]
+                },
+                "pos": [110, 125]
+              },
+              "right": {
+                "type": "NumericalLiteral",
+                "value": 10.0,
+                "pos": [127, 129]
+              },
+              "pos": [110, 129]
+            },
+            "pos": [103, 129]
+          },
+          "pos": [99, 129]
+        }
+      ],
+      "pos": [95, 130]
+    },
+    {
+      "type": "VariableDeclaration",
+      "kind": "let",
+      "declarations": [
+        {
+          "type": "VariableDeclarator",
+          "id": {
+            "type": "Identifier",
+            "name": "e",
+            "pos": [135, 136]
+          },
+          "init": {
+            "type": "BinaryExpression",
+            "operator": "*",
+            "left": {
+              "type": "BinaryExpression",
+              "operator": "*",
+              "left": {
+                "type": "NumericalLiteral",
+                "value": 1.0,
+                "pos": [139, 140]
+              },
+              "right": {
+                "type": "BinaryExpression",
+                "operator": "+",
+                "left": {
+                  "type": "NumericalLiteral",
+                  "value": 2.0,
+                  "pos": [144, 145]
+                },
+                "right": {
+                  "type": "NumericalLiteral",
+                  "value": 3.0,
+                  "pos": [148, 149]
+                },
+                "pos": [144, 149]
+              },
+              "pos": [139, 149]
+            },
+            "right": {
+              "type": "NumericalLiteral",
+              "value": 4.0,
+              "pos": [153, 154]
+            },
+            "pos": [139, 154]
+          },
+          "pos": [135, 154]
+        }
+      ],
+      "pos": [131, 155]
+    },
+    {
+      "type": "VariableDeclaration",
+      "kind": "let",
+      "declarations": [
+        {
+          "type": "VariableDeclarator",
+          "id": {
+            "type": "Identifier",
+            "name": "f",
+            "pos": [160, 161]
+          },
+          "init": {
+            "type": "BinaryExpression",
+            "operator": "*",
+            "left": {
+              "type": "NumericalLiteral",
+              "value": 1.0,
+              "pos": [164, 165]
+            },
+            "right": {
+              "type": "BinaryExpression",
+              "operator": "*",
+              "left": {
+                "type": "BinaryExpression",
+                "operator": "+",
+                "left": {
+                  "type": "NumericalLiteral",
+                  "value": 2.0,
+                  "pos": [170, 171]
+                },
+                "right": {
+                  "type": "BinaryExpression",
+                  "operator": "+",
+                  "left": {
+                    "type": "NumericalLiteral",
+                    "value": 3.0,
+                    "pos": [175, 176]
+                  },
+                  "right": {
+                    "type": "NumericalLiteral",
+                    "value": 10.0,
+                    "pos": [177, 179]
+                  },
+                  "pos": [175, 179]
+                },
+                "pos": [170, 179]
+              },
+              "right": {
+                "type": "NumericalLiteral",
+                "value": 4.0,
+                "pos": [184, 185]
+              },
+              "pos": [170, 185]
+            },
+            "pos": [164, 185]
+          },
+          "pos": [160, 186]
+        }
+      ],
+      "pos": [156, 187]
+    },
+    {
+      "type": "ExpressionStatement",
+      "expression": {
+        "type": "StringLiteral",
+        "value": "\"let e = 2 >=1 + 1>=3\"",
+        "pos": [188, 210]
+      },
+      "pos": [188, 211]
+    }
+  ],
+  "pos": [0, 212]
+}

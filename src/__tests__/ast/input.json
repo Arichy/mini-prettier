@@ -1,0 +1,15 @@
+{
+  "type": "BinaryExpression",
+  "operator": "-",
+  "left": {
+    "type": "Identifier",
+    "name": "a",
+    "pos": [103, 104]
+  },
+  "right": {
+    "type": "NumericalLiteral",
+    "value": 2.0,
+    "pos": [110, 129]
+  },
+  "pos": [103, 129]
+}

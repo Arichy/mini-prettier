@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use regex::bytes;
+use log::debug;
 
 use crate::regexes;
 
@@ -203,9 +203,9 @@ impl<'a> Lexer<'a> {
         let cur_char = self.cur_char();
         let cur_str = char_to_str(cur_char, &mut buf);
 
-        println!(
-            "cur_char: {cur_char} at pos:{}, cur_str:{cur_str}",
-            self.pos
+        debug!(
+            "cur_char: {} at pos:{}, cur_str:{}",
+            cur_char, self.pos, cur_str
         );
 
         if cur_char == '"' || cur_char == '\'' {
@@ -369,6 +369,8 @@ mod tests {
 
     #[test]
     fn lexer() {
+        let _ = env_logger::try_init();
+
         let s = "
         var a = 1;
         const b = 'hello世界';
@@ -424,6 +426,8 @@ mod tests {
 
     #[test]
     fn lex_all() {
+        let _ = env_logger::try_init();
+
         let s = "
         let a = 1;
         const b = 'hello世界';
@@ -432,7 +436,7 @@ mod tests {
         let mut lexer = Lexer::new(s);
         let result = lexer.lex_all();
 
-        println!("{:?}", result);
+        debug!("{:?}", result);
 
         assert_eq!(
             result,
@@ -455,13 +459,5 @@ mod tests {
                 (Token::Semicolon, ";", (70, 71))
             ]
         );
-    }
-
-    #[test]
-    fn test() {
-        let s = read_to_string("test.js").unwrap();
-        let mut lexer = Lexer::new(&s);
-        let result = lexer.lex_all();
-        println!("{:?}", result);
     }
 }

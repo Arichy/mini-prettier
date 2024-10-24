@@ -14,25 +14,40 @@ impl<'a> Generator<'a> {
     }
 }
 
+pub fn generate(ast: Program) -> String {
+    let generator = Generator::new(ast);
+    generator.generate()
+}
+
 mod tests {
-    use std::fs::{read_to_string, write};
+    use std::{
+        borrow::Cow,
+        fs::{read_to_string, write},
+    };
+
+    use serde_json::Value;
 
     use super::Generator;
-    use crate::{lexer::Lexer, parser::*};
+    use crate::{
+        ast::{
+            BinaryExpression, Declaration, Expression, ExpressionStatement, Identifier, Location,
+            Program, Statement, StringLiteral, VariableDeclaration, VariableDeclarator,
+        },
+        lexer::Lexer,
+        parser::*,
+    };
 
     #[test]
-    fn transform() {
-        let js_code = read_to_string("test.js").unwrap();
+    fn generate_test() {
+        let ast = read_to_string("src/__tests__/generate/input.json").unwrap();
 
-        let mut parser = Parser {
-            lexer: Lexer::new(&js_code),
-        };
-
-        let ast = parser.parse();
+        let ast = serde_json::from_str::<Program>(&ast).unwrap();
 
         let generator = Generator { ast };
         let output = generator.generate();
-        let _ = write("test_output.js", output);
-        // println!("{}", json);
+
+        let expected = read_to_string("src/__tests__/generate/output.js").unwrap();
+
+        assert_eq!(output, expected);
     }
 }

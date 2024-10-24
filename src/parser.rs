@@ -1,3 +1,7 @@
+use std::borrow::Cow;
+
+use log::debug;
+
 use crate::ast::*;
 use crate::lexer::{Lexer, Token};
 
@@ -56,7 +60,7 @@ impl<'a> Parser<'a> {
         }
 
         Program {
-            type_name: "Program",
+            type_name: Cow::Borrowed("Program"),
             body,
             pos: Location(start, self.lexer.get_char_pos()),
         }
@@ -65,8 +69,8 @@ impl<'a> Parser<'a> {
     fn parse_string_literal(&mut self) -> Option<StringLiteral<'a>> {
         if let (true, Some((_, text, range))) = self.try_parse_token(Token::StringLiteral) {
             Some(StringLiteral {
-                type_name: "StringLiteral",
-                value: text,
+                type_name: Cow::Borrowed("StringLiteral"),
+                value: Cow::Borrowed(text),
                 pos: Location(range.0, range.1),
             })
         } else {
@@ -74,10 +78,10 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_numerical_literal(&mut self) -> Option<NumericalLiteral> {
+    fn parse_numerical_literal(&mut self) -> Option<NumericalLiteral<'a>> {
         if let (true, Some((_, text, range))) = self.try_parse_token(Token::NumericalLiteral) {
             Some(NumericalLiteral {
-                type_name: "NumericalLiteral",
+                type_name: Cow::Borrowed("NumericalLiteral"),
                 value: text.parse().unwrap(),
                 pos: Location(range.0, range.1),
             })
@@ -89,8 +93,8 @@ impl<'a> Parser<'a> {
     fn parse_identifier(&mut self) -> Option<Identifier<'a>> {
         if let (true, Some((_, text, range))) = self.try_parse_token(Token::Identifier) {
             Some(Identifier {
-                type_name: "Identifier",
-                name: text,
+                type_name: Cow::Borrowed("Identifier"),
+                name: Cow::Borrowed(text),
                 pos: Location(range.0, range.1),
             })
         } else {
@@ -112,9 +116,9 @@ impl<'a> Parser<'a> {
             let start = identifier.pos.0;
             let end = right.get_range().1;
             Some(Expression::AssignmentExpression(AssignmentExpression {
-                type_name: "AssignmentExpression",
+                type_name: Cow::Borrowed("AssignmentExpression"),
                 left: identifier,
-                operator: "=",
+                operator: Cow::Borrowed("="),
                 right: Box::new(right),
                 pos: Location(start, end),
             }))
@@ -131,7 +135,7 @@ impl<'a> Parser<'a> {
         let end = right.get_range().1;
 
         Some(Expression::BinaryExpression(BinaryExpression {
-            type_name: "BinaryExpression",
+            type_name: Cow::Borrowed("BinaryExpression"),
             left: Box::new(left),
             operator: match token {
                 Token::Plus => BinaryOperator::Add,
@@ -193,10 +197,10 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_expression(&mut self, precedence: Precedence) -> Option<Expression<'a>> {
-        println!("Start parsing expression, pos: {}", self.lexer.pos);
+        debug!("Start parsing expression, pos: {}", self.lexer.pos);
         if let Some(mut left) = self.parse_prefix() {
             while let Some(next_precedence) = self.next_precedence() {
-                println!(
+                debug!(
                     "precedence: {:?}, next_precedence: {:?}, left: {:?}",
                     precedence, next_precedence, left
                 );
@@ -265,11 +269,11 @@ impl<'a> Parser<'a> {
 
                 Some(Statement::Declaration(Declaration::VariableDeclaration(
                     VariableDeclaration {
-                        type_name: "VariableDeclaration",
-                        kind,
+                        type_name: Cow::Borrowed("VariableDeclaration"),
+                        kind: Cow::Borrowed(kind),
                         pos: Location(start, end),
                         declarations: vec![VariableDeclarator {
-                            type_name: "VariableDeclarator",
+                            type_name:Cow::Borrowed("VariableDeclarator"),
                             id,
                             init,
                             pos: Location(variable_declarator_start, end - 1), // exclude semicolon
@@ -284,7 +288,7 @@ impl<'a> Parser<'a> {
                 let (_, _, (_, end)) = self.parse_expected(Token::Semicolon);
 
                 Some(Statement::ExpressionStatement(ExpressionStatement {
-                    type_name: "ExpressionStatement",
+                    type_name: Cow::Borrowed("ExpressionStatement"),
                     expression: expr,
                     pos: Location(start, end),
                 }))
@@ -296,7 +300,7 @@ impl<'a> Parser<'a> {
                 let (_, _, (_, end)) = self.parse_expected(Token::Semicolon);
 
                 Some(Statement::ExpressionStatement(ExpressionStatement {
-                    type_name: "ExpressionStatement",
+                    type_name: Cow::Borrowed("ExpressionStatement"),
                     expression: expr,
                     pos: Location(start, end),
                 }))
@@ -308,7 +312,7 @@ impl<'a> Parser<'a> {
                 let (_, _, (_, end)) = self.parse_expected(Token::Semicolon);
 
                 Some(Statement::ExpressionStatement(ExpressionStatement {
-                    type_name: "ExpressionStatement",
+                    type_name: Cow::Borrowed("ExpressionStatement"),
                     expression: expr,
                     pos: Location(start, end),
                 }))
@@ -348,35 +352,32 @@ impl<'a> Parser<'a> {
     }
 }
 
+pub fn parse(source: &str) -> Program {
+    let lexer = Lexer::new(source);
+    let mut parser = Parser::new(lexer);
+    parser.parse()
+}
+
 #[cfg(test)]
 mod tests {
+    use serde_json::{to_value, Value};
+
     use super::*;
     use std::fs::{read_to_string, write};
 
     #[test]
     fn parse() {
-        let js_code = read_to_string("test.js").unwrap();
+        let input = read_to_string("src/__tests__/parse/input.js").unwrap();
 
         let mut parser = Parser {
-            lexer: Lexer::new(&js_code),
+            lexer: Lexer::new(&input),
         };
 
-        let res = parser.parse();
-        let json = serde_json::to_string_pretty(&res).unwrap();
-        let _ = write("res.json", json.clone());
-        // println!("{}", json);
-    }
+        let ast = parser.parse();
+        let output = to_value(&ast).unwrap();
+        let expected = read_to_string("src/__tests__/parse/output.json").unwrap();
+        let expected: Value = serde_json::from_str(&expected).unwrap();
 
-    #[test]
-    fn parse_paren() {
-        let js_code = read_to_string("paren.js").unwrap();
-
-        let mut parser = Parser {
-            lexer: Lexer::new(&js_code),
-        };
-
-        let res = parser.parse();
-        let json = serde_json::to_string_pretty(&res).unwrap();
-        let _ = write("paren.json", json);
+        assert_eq!(output, expected);
     }
 }

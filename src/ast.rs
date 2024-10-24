@@ -1,4 +1,9 @@
-use serde::Serialize;
+use std::borrow::{Borrow, Cow};
+use std::collections::BTreeMap;
+
+use serde::de::{self, DeserializeOwned, IgnoredAny};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::{lexer::Token, parser::Precedence};
 
@@ -6,14 +11,14 @@ pub trait ToString {
     fn to_string(&self) -> String;
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Location(pub usize, pub usize);
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Identifier<'a> {
-    #[serde(rename(serialize = "type"))]
-    pub type_name: &'static str,
-    pub name: &'a str,
+    #[serde(rename(serialize = "type", deserialize = "type"))]
+    pub type_name: Cow<'a, str>,
+    pub name: Cow<'a, str>,
     pub pos: Location,
 }
 impl<'a> ToString for Identifier<'a> {
@@ -22,37 +27,40 @@ impl<'a> ToString for Identifier<'a> {
     }
 }
 
-#[derive(Debug, Serialize)]
-pub struct NumericalLiteral {
-    #[serde(rename(serialize = "type"))]
-    pub type_name: &'static str,
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct NumericalLiteral<'a> {
+    #[serde(rename(serialize = "type", deserialize = "type"))]
+    pub type_name: Cow<'a, str>,
     pub value: f64,
     pub pos: Location,
 }
-impl ToString for NumericalLiteral {
+impl<'a> ToString for NumericalLiteral<'a> {
     fn to_string(&self) -> String {
         self.value.to_string()
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct StringLiteral<'a> {
-    #[serde(rename(serialize = "type"))]
-    pub type_name: &'static str,
-    pub value: &'a str,
+    #[serde(rename(serialize = "type", deserialize = "type"))]
+    pub type_name: Cow<'a, str>,
+    pub value: Cow<'a, str>,
     pub pos: Location,
 }
 impl<'a> ToString for StringLiteral<'a> {
     fn to_string(&self) -> String {
-        self.value.to_string()
+        let string = self.value.to_string();
+        let string = &string[1..string.len() - 1];
+        format!("\'{}\'", string)
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct AssignmentExpression<'a> {
-    #[serde(rename(serialize = "type"))]
-    pub type_name: &'static str,
-    pub operator: &'static str,
+    #[serde(rename(serialize = "type", deserialize = "type"))]
+    #[serde(borrow)]
+    pub type_name: Cow<'a, str>,
+    pub operator: Cow<'a, str>,
     pub left: Identifier<'a>,
     pub right: Box<Expression<'a>>,
     pub pos: Location,
@@ -63,7 +71,7 @@ impl<'a> ToString for AssignmentExpression<'a> {
     }
 }
 
-#[derive(Debug, Serialize, Clone, Copy)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum BinaryOperator {
     #[serde(rename = "==")]
@@ -116,10 +124,11 @@ impl Into<Token> for BinaryOperator {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct BinaryExpression<'a> {
-    #[serde(rename(serialize = "type"))]
-    pub type_name: &'static str,
+    #[serde(borrow)]
+    #[serde(rename(serialize = "type", deserialize = "type"))]
+    pub type_name: Cow<'a, str>,
     pub operator: BinaryOperator,
     pub left: Box<Expression<'a>>,
     pub right: Box<Expression<'a>>,
@@ -169,14 +178,164 @@ impl<'a> ToString for BinaryExpression<'a> {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, PartialEq)]
 #[serde(untagged)]
 pub enum Expression<'a> {
+    #[serde(borrow)]
     Identifier(Identifier<'a>),
     StringLiteral(StringLiteral<'a>),
-    NumericalLiteral(NumericalLiteral),
+    NumericalLiteral(NumericalLiteral<'a>),
     AssignmentExpression(AssignmentExpression<'a>),
     BinaryExpression(BinaryExpression<'a>),
+}
+
+impl<'de> Deserialize<'de> for Expression<'_> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct Visitor {}
+
+        impl<'de> serde::de::Visitor<'de> for Visitor {
+            type Value = Expression<'static>;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("an expression")
+            }
+
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::MapAccess<'de>,
+            {
+                let mut type_name = None;
+                let mut value = None;
+                let mut pos = None;
+                let mut name = None;
+                let mut left = None;
+                let mut right = None;
+                let mut operator = None;
+
+                while let Ok(Some(key)) = map.next_key::<Value>() {
+                    let key = key
+                        .as_str()
+                        .ok_or(serde::de::Error::custom("Invalid key"))?;
+                    match key {
+                        "type" => {
+                            type_name = Some(map.next_value::<String>()?);
+                        }
+                        "value" => {
+                            value = Some(map.next_value::<serde_json::Value>()?);
+                        }
+                        "name" => {
+                            name = Some(map.next_value::<String>()?);
+                        }
+                        "pos" => {
+                            pos = Some(map.next_value::<Location>()?);
+                        }
+                        "left" => {
+                            left = Some(map.next_value::<serde_json::Value>()?);
+                        }
+                        "right" => {
+                            right = Some(map.next_value::<serde_json::Value>()?);
+                        }
+                        "operator" => {
+                            operator = Some(map.next_value::<serde_json::Value>()?);
+                        }
+                        _ => {
+                            return Err(serde::de::Error::custom(format!(
+                                "Unknown field: {:?}",
+                                key
+                            )));
+                        }
+                    }
+                }
+
+                let type_name = type_name.ok_or(serde::de::Error::custom("Missing type field"))?;
+                let pos = pos.ok_or(serde::de::Error::custom("Missing pos field"))?;
+
+                match type_name.as_str() {
+                    "Identifier" => {
+                        let name = name.ok_or(serde::de::Error::custom("Missing name field"))?;
+                        Ok(Expression::Identifier(Identifier {
+                            type_name: Cow::Borrowed("Identifier"),
+                            name: Cow::Owned(name),
+                            pos,
+                        }))
+                    }
+                    "StringLiteral" => {
+                        let value = value.ok_or(serde::de::Error::custom("Missing value field"))?;
+                        Ok(Expression::StringLiteral(StringLiteral {
+                            type_name: Cow::Borrowed("StringLiteral"),
+                            value: serde_json::from_value(value)
+                                .map_err(serde::de::Error::custom)?,
+                            pos,
+                        }))
+                    }
+                    "NumericalLiteral" => {
+                        let value = value.ok_or(serde::de::Error::custom("Missing value field"))?;
+                        Ok(Expression::NumericalLiteral(NumericalLiteral {
+                            type_name: Cow::Borrowed("NumericalLiteral"),
+                            value: serde_json::from_value(value)
+                                .map_err(serde::de::Error::custom)?,
+                            pos,
+                        }))
+                    }
+                    "AssignmentExpression" => {
+                        let left_value =
+                            left.ok_or(serde::de::Error::custom("Missing left field"))?;
+                        let right_value =
+                            right.ok_or(serde::de::Error::custom("Missing right field"))?;
+                        let operator_value =
+                            operator.ok_or(serde::de::Error::custom("Missing operator field"))?;
+
+                        let left =
+                            serde_json::from_value(left_value).map_err(serde::de::Error::custom)?;
+                        let right: Expression<'_> = serde_json::from_value(right_value)
+                            .map_err(serde::de::Error::custom)?;
+                        let operator = serde_json::from_value(operator_value)
+                            .map_err(serde::de::Error::custom)?;
+
+                        Ok(Expression::AssignmentExpression(AssignmentExpression {
+                            type_name: Cow::Borrowed("AssignmentExpression"),
+                            operator,
+                            left,
+                            right: Box::new(right),
+                            pos,
+                        }))
+                    }
+                    "BinaryExpression" => {
+                        let left_value =
+                            left.ok_or(serde::de::Error::custom("Missing left field"))?;
+                        let right_value =
+                            right.ok_or(serde::de::Error::custom("Missing right field"))?;
+                        let operator_value =
+                            operator.ok_or(serde::de::Error::custom("Missing operator field"))?;
+
+                        let left =
+                            serde_json::from_value(left_value).map_err(serde::de::Error::custom)?;
+                        let right = serde_json::from_value(right_value)
+                            .map_err(serde::de::Error::custom)?;
+                        let operator: BinaryOperator = serde_json::from_value(operator_value)
+                            .map_err(serde::de::Error::custom)?;
+
+                        Ok(Expression::BinaryExpression(BinaryExpression {
+                            type_name: Cow::Borrowed("BinaryExpression"),
+                            operator,
+                            left: Box::new(left),
+                            right: Box::new(right),
+                            pos,
+                        }))
+                    }
+                    _ => Err(serde::de::Error::custom(format!(
+                        "Unknown type: {:?}",
+                        type_name
+                    ))),
+                }
+            }
+        }
+
+        deserializer.deserialize_map(Visitor {})
+    }
 }
 
 impl<'a> Expression<'a> {
@@ -213,11 +372,12 @@ impl<'a> ToString for Expression<'a> {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct VariableDeclaration<'a> {
-    #[serde(rename(serialize = "type"))]
-    pub type_name: &'static str,
-    pub kind: &'static str,
+    #[serde(rename(serialize = "type", deserialize = "type"))]
+    #[serde(borrow)]
+    pub type_name: Cow<'a, str>,
+    pub kind: Cow<'a, str>,
     pub declarations: Vec<VariableDeclarator<'a>>,
     pub pos: Location,
 }
@@ -233,10 +393,11 @@ impl<'a> ToString for VariableDeclaration<'a> {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct VariableDeclarator<'a> {
-    #[serde(rename(serialize = "type"))]
-    pub type_name: &'static str,
+    #[serde(rename(serialize = "type", deserialize = "type"))]
+    #[serde(borrow)]
+    pub type_name: Cow<'a, str>,
     pub id: Identifier<'a>,
     pub init: Option<Expression<'a>>,
     pub pos: Location,
@@ -251,24 +412,26 @@ impl<'a> ToString for VariableDeclarator<'a> {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Declaration<'a> {
+    #[serde(borrow)]
     VariableDeclaration(VariableDeclaration<'a>),
 }
 impl<'a> ToString for Declaration<'a> {
     fn to_string(&self) -> String {
         match self {
             Declaration::VariableDeclaration(variable_declaration) => {
-                variable_declaration.to_string()
+                format!("{};", variable_declaration.to_string())
             }
         }
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Statement<'a> {
+    #[serde(borrow)]
     ExpressionStatement(ExpressionStatement<'a>),
     Declaration(Declaration<'a>),
 }
@@ -281,10 +444,11 @@ impl<'a> ToString for Statement<'a> {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ExpressionStatement<'a> {
-    #[serde(rename(serialize = "type"))]
-    pub type_name: &'static str,
+    #[serde(rename(serialize = "type", deserialize = "type"))]
+    #[serde(borrow)]
+    pub type_name: Cow<'a, str>,
     pub expression: Expression<'a>,
     pub pos: Location,
 }
@@ -294,10 +458,11 @@ impl<'a> ToString for ExpressionStatement<'a> {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Program<'a> {
-    #[serde(rename(serialize = "type"))]
-    pub type_name: &'static str,
+    #[serde(rename(serialize = "type", deserialize = "type"))]
+    #[serde(borrow)]
+    pub type_name: Cow<'a, str>,
     pub body: Vec<Statement<'a>>,
     pub pos: Location,
 }
@@ -314,11 +479,12 @@ impl<'a> ToString for Program<'a> {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Node<'a> {
+    #[serde(borrow)]
     Identifier(Identifier<'a>),
-    NumericalLiteral(NumericalLiteral),
+    NumericalLiteral(NumericalLiteral<'a>),
     StringLiteral(StringLiteral<'a>),
     AssignmentExpression(AssignmentExpression<'a>),
     Expression(Expression<'a>),
@@ -328,4 +494,109 @@ pub enum Node<'a> {
     Statement(Statement<'a>),
     ExpressionStatement(ExpressionStatement<'a>),
     Program(Program<'a>),
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        borrow::Cow,
+        fs::{self},
+    };
+
+    use super::*;
+    use crate::{
+        ast::{BinaryExpression, Expression, Identifier},
+        generator::generate,
+        parser::parse,
+    };
+
+    #[test]
+    fn expression_binary_expression_test() {
+        let mut b = Expression::BinaryExpression(BinaryExpression {
+            type_name: Cow::Borrowed("BinaryExpression"),
+            left: Box::new(Expression::Identifier(Identifier {
+                type_name: Cow::Borrowed("Identifier"),
+                name: Cow::Borrowed("a"),
+                pos: Location(0, 1),
+            })),
+            right: Box::new(Expression::NumericalLiteral(NumericalLiteral {
+                type_name: Cow::Borrowed("NumericalLiteral"),
+                value: 2.0,
+                pos: Location(4, 5),
+            })),
+            operator: BinaryOperator::Add,
+            pos: Location(0, 1),
+        });
+
+        let json = serde_json::to_string(&b).unwrap();
+        let expr = serde_json::from_str::<Expression>(&json).unwrap();
+
+        assert_eq!(expr, b);
+    }
+
+    #[test]
+    fn expression_assignment_expression_test() {
+        let mut a = Expression::AssignmentExpression(AssignmentExpression {
+            type_name: Cow::Borrowed("AssignmentExpression"),
+            left: Identifier {
+                type_name: Cow::Borrowed("Identifier"),
+                name: Cow::Borrowed("a"),
+                pos: Location(0, 1),
+            },
+            right: Box::new(Expression::NumericalLiteral(NumericalLiteral {
+                type_name: Cow::Borrowed("NumericalLiteral"),
+                value: 2.0,
+                pos: Location(4, 5),
+            })),
+            operator: Cow::Borrowed("="),
+            pos: Location(0, 1),
+        });
+
+        let json = serde_json::to_string(&a).unwrap();
+        let expr = serde_json::from_str::<Expression>(&json).unwrap();
+
+        assert_eq!(expr, a);
+    }
+
+    #[test]
+    fn expression_identifier_test() {
+        let id = Expression::Identifier(Identifier {
+            type_name: Cow::Borrowed("Identifier"),
+            name: Cow::Borrowed("x"),
+            pos: Location(0, 1),
+        });
+
+        let json = serde_json::to_string(&id).unwrap();
+        let expr = serde_json::from_str::<Expression>(&json).unwrap();
+
+        assert_eq!(expr, id);
+    }
+
+    #[test]
+    fn expression_string_literal_test() {
+        let s = Expression::StringLiteral(StringLiteral {
+            type_name: Cow::Borrowed("StringLiteral"),
+            value: Cow::Borrowed("\"hello\""),
+            pos: Location(0, 5),
+        });
+
+        let json = serde_json::to_string(&s).unwrap();
+        let expr = serde_json::from_str::<Expression>(&json).unwrap();
+
+        assert_eq!(expr, s);
+    }
+
+    #[test]
+    fn expression_numerical_literal_test() {
+        let n = Expression::NumericalLiteral(NumericalLiteral {
+            type_name: Cow::Borrowed("NumericalLiteral"),
+            value: 42.0,
+            pos: Location(0, 2),
+        });
+
+        let json = serde_json::to_string(&n).unwrap();
+        let expr = serde_json::from_str::<Expression>(&json).unwrap();
+
+        assert_eq!(expr, n);
+    }
 }
